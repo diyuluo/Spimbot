@@ -34,7 +34,7 @@ main:
 puzzle:
 	
 	
-	d
+	d##lololol
 	
 	# go wild
 	# the world is your oyster
