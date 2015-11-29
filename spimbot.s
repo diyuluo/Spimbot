@@ -35,7 +35,7 @@ puzzle:
 	
 	
 	d##lololol
-	
+	haha
 	# go wild
 	# the world is your oyster
 	jr	$ra
