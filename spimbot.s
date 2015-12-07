@@ -1,14 +1,16 @@
-.data
 # syscall constants
-PRINT_INT = 1
-PRINT_STRING = 4
-PRINT_CHAR = 11
+PRINT_STRING	= 4
+
+# spimbot constants
 # spimbot constants
 VELOCITY      = 0xffff0010
 ANGLE         = 0xffff0014
 ANGLE_CONTROL = 0xffff0018
 BOT_X         = 0xffff0020
 BOT_Y         = 0xffff0024
+
+OTHER_BOT_X = 0xffff00a0
+OTHER_BOT_Y = 0xffff00a4
 
 FRUIT_SMOOSHED_ACK = 0xffff0064
 FRUIT_SMOOSHED_INT_MASK = 0x2000
@@ -37,11 +39,14 @@ REQUEST_PUZZLE_INT_MASK = 0x800
 REQUEST_WORD = 0xffff00dc
 NODE_SIZE = 12
 
+num:		.word 0 #????global
+.align 2
+fruit_array:	.space 260
 fruit_data:  .space 260
 puzzle_grid: .space 8192
 
 puzzle_word: .space 128
-
+#num:		.word 0 #????global
 num_rows:    .space 4
 num_cols:    .space 4
 counter:     .space 4
@@ -58,218 +63,215 @@ directions:
 new_node_address: .word node_memory
 # Don't put anything below this just in case they malloc more than 4096
 node_memory: .space 4096
+.text 
+main:
 
-.text	
-main:	
-	
-	
-	
+##la	$t0, puzzle grid
+##sw	$t0, REQUEST_PUZZLE
+##lw	$t0,GET_ENERGY
+
 	li	$t4, FRUIT_SMOOSHED_INT_MASK 		
 	or	$t4, $t4, BONK_MASK	
-	or	$t4, $t4, TIMER_MASK
+	
 	or	$t4, $t4, REQUEST_PUZZLE_INT_MASK
-	or	$t4, $t4, OUT_OF_ENERGY_INT_MASK
-	or	$t4, $t4, 1				# global interrupt enable
-	mtc0	$t4, $12
 	
-	sw	$0, counter
-	sw	$0, flag2
-	move 	$s3, $0					# initialize my counter
-	
-	la	$s0, fruit_data
-	sw      $s0, FRUIT_SCAN
-	move	$s1, $s0
-	
-	lw	$t4, BOT_Y
-	
-while:	
-	ble	$t4, 100, conti
-	
-	li	$t2, 0
-	sw	$t2, VELOCITY
-	
-	li	$t2, 270
-	sw	$t2, ANGLE
-	
-	li	$t2, 1 ##t2 is temporary here
-	sw	$t2, ANGLE_CONTROL
-	
-	li	$t2, 10
-	sw	$t2, VELOCITY
-
-	j	move_up
-conti:	
-	li	$t2, 0
-	sw	$t2, VELOCITY
-	
-	
-	j	move_horiz
-	
-	
-move_up:
-	lw	$t4, BOT_Y	
-	ble	$t4, 100, conti
-	j	move_up
+	or	$t4, $t4, 1	
+	mtc0	$s1,$12
 
 
-	
-move_horiz:
 
-	
-	la      $t0, fruit_data    	##t0 is the address for our fruit
+	lw	$t0,0xffff0024($0)#currY
+	li	$t1,270
+	li	$t2,10##VELOCITY
+	sw	$t2,0xffff0010($0)#speed
 
-	sw      $t0, FRUIT_SCAN	
-compare:	
-	
-	lw	$t4, counter
-	bge	$t4, 2, letssmash
-	j	compare2
-	
-letssmash:
-	li	$t2, 90
-	sw	$t2, ANGLE
-	
-	li	$t2, 1 
-	sw	$t2, ANGLE_CONTROL
-	
-	##lw	$t4, BOT_Y
-	##li	$t2, 50
-	##ble	$t4, $t2, compare2
-	
-	li	$t2, 10
-	sw	$t2, VELOCITY
-	
-	j	compare
-	
-	
-compare2:
-	li	$t2, 0
-	sw	$t2, VELOCITY
-	
-	add	$s3, $s3, 1
-	li	$t2, 16
-	bge	$s3, $t2, gobacktofirstone
-	
-	add	$t2, $s0, 16
-	j	compare2Conti
-gobacktofirstone:
-	move	$s3, $0
-	move	$t2, $s0
-	
-compare2Conti:
-	lw	$t6, 8($t2)
-	
-	lw	$t5, BOT_X
-	
-	sub	$t7, $t5, $t6
-	
-	bgt	$t7, 0, move_left
-	blt	$t7, 0, move_right
-	beq	$t7, 0, stay
-	
-move_left:
-	
-	li	$t2, 180
-	sw	$t2, ANGLE
-	
-	li	$t2, 1 ##t2 is temporary here
-	sw	$t2, ANGLE_CONTROL
-	
-	li	$t2, 10
-	sw	$t2, VELOCITY
-	
-	
-move_l:	
-	la      $t0, fruit_data    
+	li	$t2, 90 #//vertical!!!!!!
+	sw	$t2,0xffff0014($0)
 
-	sw      $t0, FRUIT_SCAN	
-	
-	lw	$t6, 8($s0)
-	
-	lw	$t5, BOT_X
-	sub	$t7, $t5, $t6
+	li	$t2,1
+	sw	$t2,0xffff0018
 	
 
-	bgt	$t7, 0, move_l
-	
-	j	compare
-	
-move_right:
-	
+vetical:
+	beq	$t0 ,$t1,horizontal
+
+	lw	$t0,0xffff0024($0)#currY
+	j	vetical
+
+	li	$t2,1##VELOCITY
+	sw	$t2,0xffff0010($0)#speed
+
+
+horizontal:
+	la	$t0,num
+	lw	$t0,0($t0)
+	beq	$t0,1,smash_down
 
 	
-	li	$t2, 0
-	sw	$t2, ANGLE
-	
-	li	$t2, 1 ##t2 is temporary here
-	sw	$t2, ANGLE_CONTROL
-	
-	li	$t2, 10
-	sw	$t2, VELOCITY
-	
-move_r:	
-	la      $t0, fruit_data    
+	li	$t2,10##VELOCITY temp
+	sw	$t2,0xffff0010($0)#speed temp
 
-	sw      $t0, FRUIT_SCAN	
+
+
+	la	$t5,fruit_array
+	sw	$t5,FRUIT_SCAN
+
+fruit_selection:
+
+	lw	$s5,4($t5) #points target 
+	#add	$t5,$t5,16
+	#lw	$t0,0($t5)
+	#beq	$t0,$0,horizontal
+	#bne	$s5,1,fruit_selection ###target point is 1
+	#bne	$s5,1,fruit_selection
+
+	#sub	$t5,$t5,16
+	lw	$t6,8($t5)#//target_x,first element SHOULD NOT BE CHANGED
+	lw	$t7,0($t5)#//target_id first element SHOULD NOT BE CHANGED
+	lw	$t4,0xffff0020($0)#currX
+
+
+	beq	$t4,$t6,equal
+	bgt	$t4,$t6,left_while
+
+right_while:	
+
+
+	li	$t0,10 ##speed
+	sw	$t0,0xffff0010($0)#speed
+
+	li	$t0, 0 #right
+	sw	$t0,0xffff0014($0)
+	li	$t0,1
+	sw	$t0,0xffff0018
+
+
+	la	$t5,fruit_array
+	sw	$t5,FRUIT_SCAN
+
+
+	lw	$t1,0($t5)#id first id of the array
+
+	lw	$t4,0xffff0020($0)#currX
+	beq	$t4,$t6,equal
+	bgt	$t4,$t6,equal
+
+
+
+exist_right:
+	beq	$t1,$0,horizontal#NULL , last of array, does not exist,find new
+	add	$t5,$t5,16
+	lw	$t1,0($t5)#id of each element in the array
 	
-	
-	
-	lw	$t6, 8($s0)
-	
-	lw	$t5, BOT_X
-	sub	$t7, $t5, $t6
+	beq	$t1,$t7,exist#id exist
+exist:
+	sub	$t5,$t5,16
+	lw	$t4,0xffff0020($0)
+	#lw	$s0,8($t4) ###current x
+	#lw	$s3,12($t4)
+	add	$t5,$t5,16
+	j	exist_right
+
+left_while:
+	#j	equal
+	li	$t0,10
+	sw	$t0,0xffff0010($0)#speed
+
+	li	$t0, 180 #left
+	sw	$t0,0xffff0014($0)
+	li	$t0,1
+	sw	$t0,0xffff0018
+
+	la	$t5,fruit_array
+	sw	$t5,FRUIT_SCAN
+	lw	$t1,0($t5)#/id
+	lw	$t4,0xffff0020($0)#currX
+	beq	$t4,$t6,equal
+	#blt	$t4,$t6,equal
+	bge	$t4,$t6,equal
+
+
+exist_left:
+	beq	$t1,$0,horizontal#NULL , last of array, does not exist,find new
+	add	$t5,$t5,16
+	lw	$t1,0($t5)#id
+
+	beq	$t1,$t7,left_while#id exist
+	j	exist_left
+
+equal:
+	li	$t0,0
+	sw	$t0,0xffff0010($0)#speed
+
+	la	$t5,fruit_array
+	sw	$t5,FRUIT_SCAN
+	lw	$t1,0($t5)#id
+
 	
 
-	blt	$t7, 0, move_r
-	
-	j	compare
-	
-stay:	
-	lw	$s3, counter
-	li	$t2, 0
-	sw	$t2, VELOCITY
-		
-	lw	$t9, 0($s0)
-	la      $t0, fruit_data    	
-	
-	sw      $t0, FRUIT_SCAN
-	
-	j	cycle
-	
-cycle_return:	
-	lw	$t6, 0($s0)
-	lw	$t8, 12($s0)
-	bge	$t8, 100, compare
-	
-	lw	$t1, counter
-	bne 	$t1, $s3, compare
-	
-	bne	$t9, $t6, compare
-	
-	j	stay
-	
-cycle:	
-	
-	lw	$s1, VELOCITY
-	sw	$0, VELOCITY	
-	lw	$t0, GET_ENERGY	
-	ble	$t0, 80, we_need_energy
-cycle_end:
-	sw	$s1, VELOCITY
-	j	cycle_return
-		
+exist_equal:
+	beq	$t1,$0,horizontal#NULL , last of array, does not exist,find new
+	add	$t5,$t5,16
+	lw	$t1,0($t5)#id
 
-we_need_energy:	
-	la	$t0, puzzle_grid
-	sw 	$t0, REQUEST_PUZZLE
-	j 	cycle_end
-	
+	beq	$t1,$t7,equal#id exist
+	j	exist_equal
 
+	# enable interrupts
+	li	$t4, TIMER_MASK		# timer interrupt enable bit
+	or	$t4, $t4, BONK_MASK	# bonk interrupt bit
+	or	$t4, $t4, 1		# global interrupt enable
+	mtc0	$t4, $12		# set interrupt mask (Status register)
+
+	# request timer interrupt
+	lw	$t0, TIMER		# read current time
+	add	$t0, $t0, 50		# add 50 to current time
+	sw	$t0, TIMER		# request timer interrupt in 50 cycles
+
+	li	$a0, 10
+	sw	$a0, VELOCITY		# drive
+
+
+smash_down:
+	li	$t2,10##VELOCITY
+	sw	$t2,0xffff0010($0)#speed
+	li	$t2, 90 #//vertical!!!!!!
+	sw	$t2,0xffff0014($0)
+	li	$t2,1
+	sw	$t2,0xffff0018
+
+	la	$t0,num
+	lw	$t0,0($t0)
+
+	beq	$t0,0,smash_up
+	j	smash_down
+
+
+
+smash_up:
+	li	$t2,10##VELOCITY
+	sw	$t2,0xffff0010($0)#speed
+	lw	$t0,0xffff0024($0)#currY
+	li	$t1,250
+	li	$t2, 270 #//vertical!!!!!!
+	sw	$t2,0xffff0014($0)
+	li	$t2,1
+	sw	$t2,0xffff0018
+	beq	$t0 ,$t1,horizontal
+
+	lw	$t0,0xffff0024($0)#currY
+	j	smash_up##problem!!!
+
+
+
+
+	
 
 .kdata				# interrupt handler data (separated just for readability)
-chunkIH:	.space 68	# space for 4 registers
+chunkIH:	.space 16	# space for 4 registers
 non_intrpt_str:	.asciiz "Non-interrupt exception\n"
 unhandled_str:	.asciiz "Unhandled interrupt type\n"
+
 
 .ktext 0x80000180
 interrupt_handler:
@@ -298,7 +300,7 @@ interrupt_handler:
 	sw	$s7, 60($k0)
 	
 	sw	$sp, 64($k0)
-	
+
 	mfc0	$k0, $13		# Get Cause register                       
 	srl	$a0, $k0, 2                
 	and	$a0, $a0, 0xf		# ExcCode field                            
@@ -307,79 +309,46 @@ interrupt_handler:
 interrupt_dispatch:			# Interrupt:                             
 	mfc0	$k0, $13		# Get Cause register, again                 
 	beq	$k0, 0, done		# handled all outstanding interrupts     
-	
-	
-	
-	and	$a0, $k0, FRUIT_SMOOSHED_INT_MASK 	# is there a smooshing interrupt?
-	bne	$a0, 0, smooshed_interrupt
-	
+
 	and	$a0, $k0, BONK_MASK	# is there a bonk interrupt?                
-	bne	$a0, 0, bonk_interrupt
-	
-	and 	$a0, $k0, TIMER_MASK		# is there a timer interrupt?
-	bne 	$a0, 0, timer_interrupt
+	bne	$a0, 0, bonk_interrupt   
+
+	and 	$a0,$k0,FRUIT_SMOOSHED_INT_MASK
+	bne	$a0,0,smoosh_interrupt
 	
 	and 	$a0, $k0, REQUEST_PUZZLE_INT_MASK		# is there a timer interrupt?
 	bne 	$a0, 0, puzzle_interrupt
-	
-	and 	$a0, $k0, OUT_OF_ENERGY_INT_MASK
-	bne 	$a0, 0, no_energy
-	j	non_intrpt
-	
-smooshed_interrupt:	
-	lw	$t0, counter
-	add	$t0, $t0, 1
-	sw	$t0, counter
-	sw	$a1, FRUIT_SMOOSHED_ACK
-	j	interrupt_dispatch	# see if other interrupts are waiting	
-	
+
+	# add dispatch for other interrupt types here.
+
+	li	$v0, PRINT_STRING	# Unhandled interrupt types
+	la	$a0, unhandled_str
+	syscall 
+	j	done
+
 bonk_interrupt:
-	# acknowledge interrupt
-	sw	$a1, FRUIT_SMASH
-	sw	$a1, FRUIT_SMASH
-	lw	$t0, counter
-	sub	$t0, $t0, 2
-	sw	$t0, counter
-	sw	$a1, BONK_ACK		
-	
-relocate:
-	li	$a1, 270
-	sw	$a1, ANGLE
-	
-	li	$a1, 1 			##t2 is temporary here
-	sw	$a1, ANGLE_CONTROL
-	
-	li	$a1, 10
-	sw	$a1, VELOCITY
-	
-relocate2:
-	lw	$t4, BOT_Y	
-	sw	$0, VELOCITY
-	ble	$t4, 100, interrupt_dispatch
-	li	$a1, 10
-	sw	$a1, VELOCITY
-	j	relocate2
-	
-		
-	
-timer_interrupt:
-		
-	sw 	$a1, TIMER_ACK	 	# acknowledge interrupt
-						
-	## more to be added		
-					
-	lw 	$v0, 0xffff001c($0) 	# current time
-	add 	$v0, $v0, 50000		
-	sw 	$v0, 0xffff001c($0) 	# request timer in 50000
-					
-	j 	interrupt_dispatch 	# see if other interrupts are waiting
-	
-no_energy:
-	sw 	$a1, OUT_OF_ENERGY_ACK	##acknowledge interrupt
-	li	$a1, 1
-	sw	$a1, flag2
-	j 	interrupt_dispatch 
-					
+	la	$a3,num
+	lw	$t0,0($a3)
+smash_fruit:
+	beq	$t0,$0,ack
+	sw	$a0,FRUIT_SMASH($0)##SMASH THE FRUIT
+	sub	$t0,$t0,1
+	j	smash_fruit	
+ack:
+	sw	$0,0($a3)
+	sw	$a1, BONK_ACK		# acknowledge interrupt
+	sw	$zero, VELOCITY		# ???
+
+	j	interrupt_dispatch	# see if other interrupts are waiting
+
+
+smoosh_interrupt:
+	la	$a3,num
+	lw	$t0,0($a3)
+	add	$t0,$t0,1	
+	sw	$t0,0($a3) #not sure about this
+	sw	$a1, SMOOSHED_ACK
+	j	interrupt_dispatch
 puzzle_interrupt:			
 					
 	sw	$a1, REQUEST_PUZZLE_ACK # acknowledge interrupt
@@ -397,41 +366,18 @@ puzzle_interrupt:
 	la	$a1, puzzle_word
 	li	$a2, 0
 	li	$a3, 0
-	sw	$ra, amemory
+	
 	jal	search_neighbors
-	lw	$ra, amemory
+	
 sn_finished:	
 	sw  	$v0, SUBMIT_SOLUTION
-	j 	interrupt_dispatch	
-					
+	j 	interrupt_dispatch		
+
 non_intrpt:				# was some non-interrupt
-	li	$v0, PRINT_STRING	
-	la	$a0, non_intrpt_str	
+	li	$v0, PRINT_STRING
+	la	$a0, non_intrpt_str
 	syscall				# print out an error message
-					# fall through to done
-done:
-	
-	la	$k0, chunkIH
-	lw	$a0, 0($k0)		# Get some free registers                  
-	lw	$a1, 4($k0)
-	lw	$a2, 8($k0)
-	lw	$a3, 12($k0)		
-	lw	$t0, 16($k0)
-	lw	$t1, 20($k0)
-	lw	$v0, 24($k0)
-	lw	$ra, 28($k0)
-	
-	lw	$s0, 32($k0)
-	lw	$s1, 36($k0)
-	lw	$s2, 40($k0)
-	lw	$s3, 44($k0)
-	lw	$s4, 48($k0)
-	lw	$s5, 52($k0)
-	lw	$s6, 56($k0)
-	lw	$s7, 60($k0)
-	
-	lw	$sp, 64($k0)
-	
+	# fall through to done
 allocate_new_node:		
 	lw	$v0, new_node_address
 	add	$t0, $v0, NODE_SIZE
@@ -470,7 +416,7 @@ search_neighbors:
 
 sn_main:
 	sub	$sp, $sp, 36
-	##sw	$ra, 0($sp)
+	sw	$ra, 0($sp)
 	sw	$s0, 4($sp)
 	sw	$s1, 8($sp)
 	sw	$s2, 12($sp)
@@ -539,7 +485,7 @@ sn_next:
 	li	$v0, 0			# return NULL (data flow)
 
 sn_return:
-	##lw	$ra, 0($sp)
+	lw	$ra, 0($sp)
 	lw	$s0, 4($sp)
 	lw	$s1, 8($sp)
 	lw	$s2, 12($sp)
@@ -551,8 +497,32 @@ sn_return:
 	add	$sp, $sp, 36
 	jr	$ra
 ##search neighbour finished
+
+done:
+	la	$k0, chunkIH
+	la	$k0, chunkIH
+	lw	$a0, 0($k0)		# Get some free registers                  
+	lw	$a1, 4($k0)
+	lw	$a2, 8($k0)
+	lw	$a3, 12($k0)		
+	lw	$t0, 16($k0)
+	lw	$t1, 20($k0)
+	lw	$v0, 24($k0)
+	lw	$ra, 28($k0)
 	
+	lw	$s0, 32($k0)
+	lw	$s1, 36($k0)
+	lw	$s2, 40($k0)
+	lw	$s3, 44($k0)
+	lw	$s4, 48($k0)
+	lw	$s5, 52($k0)
+	lw	$s6, 56($k0)
+	lw	$s7, 60($k0)
+	
+	lw	$sp, 64($k0)
+
 .set noat
 	move	$at, $k1		# Restore $at
 .set at 
 	eret
+
