@@ -1,6 +1,8 @@
+.data
 # syscall constants
 PRINT_STRING	= 4
-
+PRINT_INT = 1
+PRINT_CHAR = 11
 # spimbot constants
 # spimbot constants
 VELOCITY      = 0xffff0010
@@ -40,13 +42,14 @@ REQUEST_WORD = 0xffff00dc
 NODE_SIZE = 12
 
 num:		.word 0 #????global
+vx:		.word 0
+vy:		.word 0
+botv:		.word 0
 .align 2
-fruit_array:	.space 260
-fruit_data:  .space 260
+fruit_array: .space 260
 puzzle_grid: .space 8192
 
 puzzle_word: .space 128
-#num:		.word 0 #????global
 num_rows:    .space 4
 num_cols:    .space 4
 counter:     .space 4
@@ -72,149 +75,355 @@ main:
 
 	li	$t4, FRUIT_SMOOSHED_INT_MASK 		
 	or	$t4, $t4, BONK_MASK	
-	
 	or	$t4, $t4, REQUEST_PUZZLE_INT_MASK
-	
 	or	$t4, $t4, 1	
-	mtc0	$s1,$12
+	mtc0	$t4, $12
 
 
 
-	lw	$t0,0xffff0024($0)#currY
-	li	$t1,270
-	li	$t2,10##VELOCITY
-	sw	$t2,0xffff0010($0)#speed
+	lw	$t0, 0xffff0024($0)		#currY
+	li	$t1, 270
+	li	$t2, 1				##VELOCITY
+	sw	$t2, 0xffff0010($0)		#speed
 
-	li	$t2, 90 #//vertical!!!!!!
-	sw	$t2,0xffff0014($0)
+	li	$t2, 90 			#//vertical!!!!!!
+	sw	$t2, 0xffff0014($0)
 
-	li	$t2,1
-	sw	$t2,0xffff0018
-	
+	li	$t2, 1
+	sw	$t2, 0xffff0018
 
 vetical:
-	beq	$t0 ,$t1,horizontal
+	sw	$0, VELOCITY
+	lw	$t0, BOT_Y
+	li	$t1, 270
+	
+	bge	$t0, $t1, horizontal
+	
+	sw	$0, VELOCITY
+	lw	$t0, BOT_Y
+	li	$t1, 290
+	
+	blt	$t0, $t1, not_go_up
+	
+	li	$t2, 10				##VELOCITY
+	sw	$t2, VELOCITY			#speed
 
-	lw	$t0,0xffff0024($0)#currY
+	li	$t2, 270 			#//vertical!!!!!!
+	sw	$t2, ANGLE
+
+	li	$t2, 1
+	sw	$t2, 0xffff0018
+	j	vertical
+not_go_up:
+	li	$t2, 10				##VELOCITY
+	sw	$t2, VELOCITY			#speed
+
+	li	$t2, 90 			#//vertical!!!!!!
+	sw	$t2, ANGLE
+
+	li	$t2, 1
+	sw	$t2, 0xffff0018
+	
+	lw	$t0, BOT_Y			#currY
 	j	vetical
 
-	li	$t2,1##VELOCITY
-	sw	$t2,0xffff0010($0)#speed
-
+	li	$t2, 1				##VELOCITY
+	sw	$t2, VELOCITY			#speed
+	
 
 horizontal:
-	la	$t0,num
-	lw	$t0,0($t0)
-	beq	$t0,1,smash_down
+	sw	$0, VELOCITY
+	
+	lw	$t0, GET_ENERGY
+	li	$t1, 60
+	bge	$t0, $t1, skip_puzzle
+	la	$t0, puzzle_grid
+	sw	$t0, REQUEST_PUZZLE
+skip_puzzle:	
+	li	$t0, 10
+	sw	$t0, VELOCITY
+
+	la	$t0, num
+	lw	$t0, 0($t0)
+	beq	$t0, 1, smash_down
 
 	
-	li	$t2,10##VELOCITY temp
-	sw	$t2,0xffff0010($0)#speed temp
+	li	$t2, 10##VELOCITY temp
+	sw	$t2, VELOCITY
 
 
 
-	la	$t5,fruit_array
-	sw	$t5,FRUIT_SCAN
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
 
 fruit_selection:
 
-	lw	$s5,4($t5) #points target 
-	#add	$t5,$t5,16
-	#lw	$t0,0($t5)
-	#beq	$t0,$0,horizontal
-	#bne	$s5,1,fruit_selection ###target point is 1
-	#bne	$s5,1,fruit_selection
 
-	#sub	$t5,$t5,16
-	lw	$t6,8($t5)#//target_x,first element SHOULD NOT BE CHANGED
-	lw	$t7,0($t5)#//target_id first element SHOULD NOT BE CHANGED
-	lw	$t4,0xffff0020($0)#currX
+	lw	$s5, 4($t5) #points target 
+
+	lw	$t6, 8($t5)#//target_x,first element SHOULD NOT BE CHANGED
+	lw	$t7, 0($t5)#//target_id first element SHOULD NOT BE CHANGED
+	lw	$t4, 0xffff0020($0)#currX
 
 
-	beq	$t4,$t6,equal
-	bgt	$t4,$t6,left_while
+added_stuff:
+
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+	
+	lw	$t0,4($t5)
+cherry_load_1:
+	beq	$t0,10,find1
+	add	$t5,$t5,16
+	lw	$t0,0($t5)
+	beq	$t0,0,continue
+	lw	$t0,4($t5)
+	j	cherry_load_1
+	
+find1:	
+
+	lw	$s0,0($t5)
+	lw	$s1,8($t5)#x1
+	lw	$s2,12($t5)
+	lw	$s3, 0xffff0020($0)#currX
+
+
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+	lw	$t0,0($t5)
+
+check_id:
+
+	beq	$t0,$s0,check_change
+	add	$t5,$t5,16
+	lw	$t0,0($t5)
+	lw	$s4,8($t5)
+
+	beq	$t0,$0,continue
+	add	$t5,$t5,16
+	j	check_id
+
+check_change:
+
+	sub	$s7,$s1,$s4
+	abs	$s7,$s7
+	bge	$s7,5,difference_success
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+	lw	$t0,0($t5)	
+	j	check_id
+
+
+
+difference_success:
+
+
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+	lw	$t0,0($t5)
+cherry_load_2:
+	beq	$t0,$s0,find2
+	add	$t5,$t5,16
+	lw	$t0,0($t5)
+	beq	$t0,0,continue
+	j	cherry_load_2
+
+find2:
+	lw	$s4,8($t5)
+	lw	$s5,12($t5)
+	lw	$s6, 0xffff0020($0)#currX
+
+
+calc:
+
+	move	$a0, $s1
+	li	$v0, PRINT_INT
+	syscall
+
+	li	$a0, ' '
+	li	$v0, PRINT_CHAR
+	syscall
+
+	move	$a0, $s4
+	li	$v0, PRINT_INT
+	syscall
+
+	li	$a0, 'e'
+	li	$v0, PRINT_CHAR
+	syscall
+	sub	$s7,$s4,$s1
+	#div	$s7,$s7,10000
+
+
+	sub	$t8,$s5,$s2
+	#div	$t8,$t8,10000	
+
+	sub	$t0,$s6,$s3
+	#div	$t0,$t0,10000
+
+	ble	$t0,$0,continue
+	
+	sub	$t5,$s5,270
+	sub	$t5,$0,$t5
+
+	div	$t5,$t5,$t8
+	mul	$t5,$t5,$s1
+	add	$t5,$t5,$4
+
+	sub	$t3,$s5,220
+	sub	$t3,$0,$t3
+	div	$t3,$t3,$t8
+
+	sub	$t2,$s6,$t5
+	div	$t2,$t2,$t0
+	abs	$t2,$t2
+
+
+	bge	$s6,$t2,continue
+
+
+right_cherry:
+	li	$t2, 10				##VELOCITY
+	sw	$t2, VELOCITY			#speed
+
+	li	$t2, 0 			#//vertical!!!!!!
+	sw	$t2, ANGLE
+
+	li	$t2, 1
+	sw	$t2, 0xffff0018 
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+
+	lw	$t1, 0($t5)#id first id of the array
+exist_right:
+	beq	$t1, $0, continue#NULL , last of array, does not exist,find new
+	add	$t5, $t5,16
+	lw	$t1, 0($t5)#id of each element in the array
+	beq	$t1, $s0, exist_right_cherry#id exist
+exist_right_cherry:
+	lw	$t4, 0xffff0020($0)
+	lw	$s0,8($t5) ###current x
+	j	exist_right_cherry
+
+
+equal_cherry:	
+	li	$t2, 0			##VELOCITY
+	sw	$t2, VELOCITY	
+		#speed
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+	lw	$t1, 0($t5)		#id
+exist_equal_cherry:
+	beq	$t1, $0,continue	#NULL , last of array, does not exist,find new
+	add	$t5, $t5, 16
+	lw	$t1, 0($t5)		#id
+
+	beq	$t1, $t7, equal_cherry		#id exist
+	j	exist_equal_cherry
+
+
+
+
+
+
+
+
+
+	
+
+
+
+
+
+continue:
+	move	$a0, $t0
+	li	$v0, PRINT_INT
+	#syscall
+	beq	$t4, $t6,equal
+	bgt	$t4, $t6,left_while
 
 right_while:	
 
 
-	li	$t0,10 ##speed
-	sw	$t0,0xffff0010($0)#speed
+	li	$t0, 10 ##speed
+	sw	$t0, 0xffff0010($0)#speed
 
 	li	$t0, 0 #right
-	sw	$t0,0xffff0014($0)
-	li	$t0,1
-	sw	$t0,0xffff0018
+	sw	$t0, 0xffff0014($0)
+	li	$t0, 1
+	sw	$t0, 0xffff0018
 
 
-	la	$t5,fruit_array
-	sw	$t5,FRUIT_SCAN
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
 
 
-	lw	$t1,0($t5)#id first id of the array
+	lw	$t1, 0($t5)#id first id of the array
 
-	lw	$t4,0xffff0020($0)#currX
-	beq	$t4,$t6,equal
-	bgt	$t4,$t6,equal
+	#lw	$t4, 0xffff0020($0)#currX
+	#beq	$t4, $t6,equal
+	#bgt	$t4, $t6,equal
 
 
 
 exist_right:
-	beq	$t1,$0,horizontal#NULL , last of array, does not exist,find new
-	add	$t5,$t5,16
-	lw	$t1,0($t5)#id of each element in the array
+	beq	$t1, $0, horizontal#NULL , last of array, does not exist,find new
+	add	$t5, $t5,16
+	lw	$t1, 0($t5)#id of each element in the array
 	
-	beq	$t1,$t7,exist#id exist
+	beq	$t1, $t7, exist#id exist
 exist:
-	sub	$t5,$t5,16
-	lw	$t4,0xffff0020($0)
-	#lw	$s0,8($t4) ###current x
-	#lw	$s3,12($t4)
-	add	$t5,$t5,16
+	#sub	$t5, $t5, 16
+	lw	$t4, 0xffff0020($0)
+	lw	$s0,8($t5) ###current x
+	#lw	$s3,12($t5)
+	##add	$t5, $t5, 16
 	j	exist_right
 
 left_while:
 	#j	equal
-	li	$t0,10
-	sw	$t0,0xffff0010($0)#speed
+	li	$t0, 10
+	sw	$t0, 0xffff0010($0)#speed
 
 	li	$t0, 180 #left
-	sw	$t0,0xffff0014($0)
-	li	$t0,1
-	sw	$t0,0xffff0018
+	sw	$t0, 0xffff0014($0)
+	li	$t0, 1
+	sw	$t0, 0xffff0018
 
-	la	$t5,fruit_array
-	sw	$t5,FRUIT_SCAN
-	lw	$t1,0($t5)#/id
-	lw	$t4,0xffff0020($0)#currX
-	beq	$t4,$t6,equal
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+	lw	$t1, 0($t5)#/id
+	lw	$t4, 0xffff0020($0)#currX
+	beq	$t4, $t6, equal
 	#blt	$t4,$t6,equal
-	bge	$t4,$t6,equal
+	#bge	$t4, $t6, equal
 
 
 exist_left:
-	beq	$t1,$0,horizontal#NULL , last of array, does not exist,find new
-	add	$t5,$t5,16
-	lw	$t1,0($t5)#id
+	beq	$t1, $0, horizontal	#NULL , last of array, does not exist,find new
+	add	$t5, $t5, 16
+	lw	$t1, 0($t5)		#id
 
-	beq	$t1,$t7,left_while#id exist
+	beq	$t1, $t7, left_while	#id exist
 	j	exist_left
 
 equal:
-	li	$t0,0
-	sw	$t0,0xffff0010($0)#speed
 
-	la	$t5,fruit_array
-	sw	$t5,FRUIT_SCAN
-	lw	$t1,0($t5)#id
+	li	$t0, 0
+	sw	$t0, 0xffff0010($0)	#speed
+
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+	lw	$t1, 0($t5)		#id
 
 	
 
 exist_equal:
-	beq	$t1,$0,horizontal#NULL , last of array, does not exist,find new
-	add	$t5,$t5,16
-	lw	$t1,0($t5)#id
+	beq	$t1, $0,vetical	#NULL , last of array, does not exist,find new
+	add	$t5, $t5, 16
+	lw	$t1, 0($t5)		#id
 
-	beq	$t1,$t7,equal#id exist
+	beq	$t1, $t7, equal		#id exist
 	j	exist_equal
 
 	# enable interrupts
@@ -233,36 +442,18 @@ exist_equal:
 
 
 smash_down:
-	li	$t2,10##VELOCITY
-	sw	$t2,0xffff0010($0)#speed
-	li	$t2, 90 #//vertical!!!!!!
-	sw	$t2,0xffff0014($0)
-	li	$t2,1
-	sw	$t2,0xffff0018
+	li	$t2, 10			##VELOCITY
+	sw	$t2, 0xffff0010($0)	#speed
+	li	$t2, 90 		#//vertical!!!!!!
+	sw	$t2, 0xffff0014($0)
+	li	$t2, 1
+	sw	$t2, 0xffff0018
 
-	la	$t0,num
-	lw	$t0,0($t0)
+	la	$t0, num
+	lw	$t0, 0($t0)
 
-	beq	$t0,0,smash_up
+	beq	$t0, 0, vetical
 	j	smash_down
-
-
-
-smash_up:
-	li	$t2,10##VELOCITY
-	sw	$t2,0xffff0010($0)#speed
-	lw	$t0,0xffff0024($0)#currY
-	li	$t1,250
-	li	$t2, 270 #//vertical!!!!!!
-	sw	$t2,0xffff0014($0)
-	li	$t2,1
-	sw	$t2,0xffff0018
-	beq	$t0 ,$t1,horizontal
-
-	lw	$t0,0xffff0024($0)#currY
-	j	smash_up##problem!!!
-
-
 
 
 	
@@ -323,22 +514,43 @@ interrupt_dispatch:			# Interrupt:
 
 	li	$v0, PRINT_STRING	# Unhandled interrupt types
 	la	$a0, unhandled_str
-	syscall 
+	#syscall 
 	j	done
 
 bonk_interrupt:
-	la	$a3,num
-	lw	$t0,0($a3)
+	lw	$t0, num
 smash_fruit:
-	beq	$t0,$0,ack
-	sw	$a0,FRUIT_SMASH($0)##SMASH THE FRUIT
-	sub	$t0,$t0,1
+	beq	$t0, $0, ack
+	
+	sw	$a0, FRUIT_SMASH
+	sub	$t0, $t0,1
+	
 	j	smash_fruit	
 ack:
-	sw	$0,0($a3)
+	sw	$0,  num
 	sw	$a1, BONK_ACK		# acknowledge interrupt
-	sw	$zero, VELOCITY		# ???
+	##sw	$zero, VELOCITY		# ???
+	
+	li	$t2, 270 		
+	sw	$t2, ANGLE
+	li	$t2, 1
+	sw	$t2, ANGLE_CONTROL
+	sw	$0, VELOCITY
+	
+smash_up:
+	li	$t2, 10			
+	sw	$t2, VELOCITY
+	
+	lw	$t0, BOT_Y		#currY
+	li	$t1, 270
+	
+	ble	$t0, $t1, here
 
+	##lw	$t0, 0xffff0024($0)	#currY
+	j	smash_up		##problem!!!
+
+
+here:
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
 
@@ -347,10 +559,13 @@ smoosh_interrupt:
 	lw	$t0,0($a3)
 	add	$t0,$t0,1	
 	sw	$t0,0($a3) #not sure about this
-	sw	$a1, SMOOSHED_ACK
+	sw	$a1, FRUIT_SMOOSHED_ACK
 	j	interrupt_dispatch
 puzzle_interrupt:			
-					
+	
+	lw	$s5, VELOCITY
+	sw	$0, VELOCITY
+				
 	sw	$a1, REQUEST_PUZZLE_ACK # acknowledge interrupt
 	la	$t0, puzzle_word
 	sw	$t0, REQUEST_WORD
@@ -367,16 +582,33 @@ puzzle_interrupt:
 	li	$a2, 0
 	li	$a3, 0
 	
-	jal	search_neighbors
+	jal	solve_puzzle
+	
+	bne	$v0, $0, sn_finished 
+	
+	la	$t0, puzzle_grid
+	sw	$t0, REQUEST_PUZZLE
+	j 	interrupt_dispatch
 	
 sn_finished:	
 	sw  	$v0, SUBMIT_SOLUTION
+	move	$a0, $v0
+	li	$v0, PRINT_INT
+	#syscall
+	
+	li	$a0, ' '
+	li	$v0, PRINT_CHAR
+	#syscall
+	
+	sw	$s5, VELOCITY
+	
+	
 	j 	interrupt_dispatch		
 
 non_intrpt:				# was some non-interrupt
 	li	$v0, PRINT_STRING
 	la	$a0, non_intrpt_str
-	syscall				# print out an error message
+	#syscall				# print out an error message
 	# fall through to done
 allocate_new_node:		
 	lw	$v0, new_node_address
@@ -409,6 +641,58 @@ set_node:
 	
 ##set node finished
 
+
+
+## Node *
+## search_neighbors(char *puzzle, const char *word, int row, int col) {
+##     if (word == NULL) {
+##         return NULL;
+##     }
+##     for (int i = 0; i < 4; i++) {
+##         int next_row = row + directions[i][0];
+##         int next_col = col + directions[i][1];
+##         // boundary check
+##
+##
+##
+##				
+##		if ( next row == num_rows ){
+##			next row = 0;
+##			next col ++;
+##		}
+##
+##		if ( next col == num cols){
+##			next col = 0;
+##			next row ++;
+##		}
+##
+##
+##
+##		
+##     *    if ((next_row > -1) && (next_row < num_rows) && (next_col > -1) &&
+##             (next_col < num_cols)) {
+##             if (puzzle[next_row * num_cols + next_col] == *word) {
+##                 if (*(word + 1) == '\0') {
+##                     return set_node(next_row, next_col, NULL);
+##                 }
+##                 // mark the spot on puzzle as visited
+##                 puzzle[next_row * num_cols + next_col] = '*';
+##                 // search for next char in the word
+##                 Node *next_node =
+##                     search_neighbors(puzzle, word + 1, next_row, next_col);
+##                 // unmark
+##                 puzzle[next_row * num_cols + next_col] = *word;
+##                 // if there is a valid neighbor, return the linked list
+##                 if (next_node) {
+##                     return set_node(next_row, next_col, next_node);
+##                 }
+##             }
+##         }
+##     }
+##     return NULL;
+## }
+
+
 search_neighbors:
 	bne	$a1, 0, sn_main		# !(word == NULL)
 	li	$v0, 0			# return NULL (data flow)
@@ -438,6 +722,19 @@ sn_loop:
 	add	$s5, $s2, $t1		# next_row
 	lw	$t1, directions+4($t0)	# directions[i][1]
 	add	$s6, $s3, $t1		# next_col
+
+	lw	$t0, num_rows		# my new code goes here
+	bne	$t0, $s5, skip1		##
+	li	$s5, 0			##
+	add	$s6, $s6, 1
+	
+					##
+skip1:					##
+	lw	$t0, num_cols		##
+	bne	$t0, $s6, skip2		##
+	li	$s6, 0			##
+	add	$s5, $s5, 1
+skip2:
 
 	ble	$s5, -1, sn_next	# !(next_row > -1)
 	lw	$t0, num_rows
@@ -498,6 +795,104 @@ sn_return:
 	jr	$ra
 ##search neighbour finished
 
+solve_puzzle:
+	sub	$sp, $sp, 24
+	sw	$ra, 0($sp)
+	sw	$s0, 4($sp)
+	sw	$s1, 8($sp)
+	sw	$s2, 12($sp)
+	sw	$s3, 16($sp)
+	sw	$s4, 20($sp)
+
+	move	$s0, $a0		# puzzle
+	move	$s1, $a1		# word
+
+	lb	$t0, 0($s1)		# word[0]
+	beq	$t0, 0, sp_true		# word[0] == '\0'
+
+	li	$s2, 0			# row = 0
+
+sp_row_for:
+	lw	$t0, num_rows
+	bge	$s2, $t0, sp_false	# !(row < num_rows)
+
+	li	$s3, 0			# col = 0
+
+sp_col_for:
+	lw	$t0, num_cols
+	bge	$s3, $t0, sp_row_next	# !(col < num_cols)
+
+	move	$a0, $s0		# puzzle
+	move	$a1, $s2		# row
+	move	$a2, $s3		# col
+	jal	get_char		# $v0 = current_char
+	lb	$t0, 0($s1)		# target_char = word[0]
+	bne	$v0, $t0, sp_col_next	# !(current_char == target_char)
+
+##	move	$a0, $s0		# puzzle
+##	move	$a1, $s2		# row
+##	move	$a2, $s3		# col
+##	li	$a3, '*'
+##	jal	set_char
+
+	move	$a0, $s0		# puzzle
+	add	$a1, $s1, 0		# word + 1
+	move	$a2, $s2		# row
+	move	$a3, $s3		# col
+	jal	search_neighbors
+	move	$s4, $v0		# exist
+
+##	move	$a0, $s0		# puzzle
+##	move	$a1, $s2		# row
+##	move	$a2, $s3		# col
+##	lb	$a3, 0($s1)		# word[0]
+##	jal	set_char
+
+	bne	$s4, 0, sp_true		# if (exist)
+
+sp_col_next:
+	add	$s3, $s3, 1		# col++
+	j	sp_col_for
+
+sp_row_next:
+	add	$s2, $s2, 1		# row++
+	j	sp_row_for
+
+sp_false:
+	li	$v0, 0			# false
+	j	sp_done
+
+sp_true:
+	move	$v0, $s4		# true
+
+sp_done:
+	lw	$ra, 0($sp)
+	lw	$s0, 4($sp)
+	lw	$s1, 8($sp)
+	lw	$s2, 12($sp)
+	lw	$s3, 16($sp)
+	lw	$s4, 20($sp)
+	add	$sp, $sp, 24
+	jr	$ra
+
+get_char:
+	lw	$v0, num_cols
+	mul	$v0, $a1, $v0	# row * num_cols
+	add	$v0, $v0, $a2	# row * num_cols + col
+	add	$v0, $a0, $v0	# &array[row * num_cols + col]
+	lb	$v0, 0($v0)	# array[row * num_cols + col]
+	jr	$ra
+
+set_char:
+	lw	$v0, num_cols
+	mul	$v0, $a1, $v0	# row * num_cols
+	add	$v0, $v0, $a2	# row * num_cols + col
+	add	$v0, $a0, $v0	# &array[row * num_cols + col]
+	sb	$a3, 0($v0)	# array[row * num_cols + col] = c
+	jr	$ra
+
+
+
 done:
 	la	$k0, chunkIH
 	la	$k0, chunkIH
@@ -525,4 +920,3 @@ done:
 	move	$at, $k1		# Restore $at
 .set at 
 	eret
-
