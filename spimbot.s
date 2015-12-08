@@ -1,14 +1,18 @@
 .data
 # syscall constants
+PRINT_STRING	= 4
 PRINT_INT = 1
-PRINT_STRING = 4
 PRINT_CHAR = 11
+# spimbot constants
 # spimbot constants
 VELOCITY      = 0xffff0010
 ANGLE         = 0xffff0014
 ANGLE_CONTROL = 0xffff0018
 BOT_X         = 0xffff0020
 BOT_Y         = 0xffff0024
+
+OTHER_BOT_X = 0xffff00a0
+OTHER_BOT_Y = 0xffff00a4
 
 FRUIT_SMOOSHED_ACK = 0xffff0064
 FRUIT_SMOOSHED_INT_MASK = 0x2000
@@ -37,17 +41,18 @@ REQUEST_PUZZLE_INT_MASK = 0x800
 REQUEST_WORD = 0xffff00dc
 NODE_SIZE = 12
 
-fruit_data:  .space 260
+num:		.word 0 #????global
+.align 2
+fruit_array: .space 260
 puzzle_grid: .space 8192
 
 puzzle_word: .space 128
-
 num_rows:    .space 4
 num_cols:    .space 4
 counter:     .space 4
 flag:	     .space 4  ##determine if puzzle is ready
-flag2:	     .space 4  ##determine if puzzle is been requested
-
+flag2:	     .space 4  ##determine if we need energy now
+amemory:     .space 4
 directions:
 	.word -1  0
 	.word  0  1
@@ -58,223 +63,235 @@ directions:
 new_node_address: .word node_memory
 # Don't put anything below this just in case they malloc more than 4096
 node_memory: .space 4096
+.text 
+main:
 
-.text	
-main:	
-	
+##la	$t0, puzzle grid
+##sw	$t0, REQUEST_PUZZLE
+##lw	$t0,GET_ENERGY
+
 	li	$t4, FRUIT_SMOOSHED_INT_MASK 		
 	or	$t4, $t4, BONK_MASK	
-	or	$t4, $t4, TIMER_MASK
 	or	$t4, $t4, REQUEST_PUZZLE_INT_MASK
-	or	$t4, $t4, OUT_OF_ENERGY_INT_MASK
-	or	$t4, $t4, 1				# global interrupt enable
+	or	$t4, $t4, 1	
 	mtc0	$t4, $12
-	
-	sw	$0, counter
-	sw	$0, flag2
-	move 	$s3, $0					# initialize my counter
-	
-	la	$s0, fruit_data
-	sw      $s0, FRUIT_SCAN
-	move	$s2, $s0
-	
-	lw	$t4, BOT_Y
-	
-while:	
-	ble	$t4, 100, conti
-	
-	li	$t2, 0
-	sw	$t2, VELOCITY
-	
-	li	$t2, 270
-	sw	$t2, ANGLE
-	
-	li	$t2, 1 ##t2 is temporary here
-	sw	$t2, ANGLE_CONTROL
-	
-	li	$t2, 10
-	sw	$t2, VELOCITY
 
+
+
+	lw	$t0, 0xffff0024($0)		#currY
+	li	$t1, 270
+	li	$t2, 10				##VELOCITY
+	sw	$t2, 0xffff0010($0)		#speed
+
+	li	$t2, 90 			#//vertical!!!!!!
+	sw	$t2, 0xffff0014($0)
+
+	li	$t2, 1
+	sw	$t2, 0xffff0018
 	
 
+vetical:
+	sw	$0, VELOCITY
+	lw	$t0, BOT_Y
+	li	$t1, 270
 	
-	
-move_up:
-	lw	$t4, BOT_Y	
-	ble	$t4, 100, conti
-	j	move_up
-
-conti:	
-	li	$t2, 0
-	sw	$t2, VELOCITY
-	
-	
-move_horiz:
-	la      $t0, fruit_data    	##t0 is the address for our fruit
-
-	sw      $t0, FRUIT_SCAN	
-compare:	
-	lw	$t4, counter
-	bne	$t4, 0, letssmash
-	j	compare2
-	
-letssmash:
-	li	$t2, 90
-	sw	$t2, ANGLE
-	
-	li	$t2, 1 
-	sw	$t2, ANGLE_CONTROL
-	
-	##lw	$t4, BOT_Y
-	##li	$t2, 50
-	##ble	$t4, $t2, compare2
-	
-	li	$t2, 10
-	sw	$t2, VELOCITY
-	
-	j	compare
-	
-	
-compare2:
-	li	$t2, 0
-	sw	$t2, VELOCITY
-	
-	add	$s3, $s3, 1
-	add	$s2, $s2, 16
-	la	$t2, fruit_data
-	add	$t2, $t2, 240
-	
-	bge	$s2, $t2, gobacktofirstone
-	j	compare2Conti
-gobacktofirstone:
-	move	$s3, $0
-	la	$s2, fruit_data
-	
-compare2Conti:
-
-	lw	$t0, counter
-	bne	$t0, 0, letssmash
-	lw	$t6, 8($s2)
-	
-	lw	$t5, BOT_X
-	
-	##sub	$t7, $t5, $t6
-	
-	li	$t1, 20
-	li	$t2, 280
-	ble	$t6, $t1,compare
-	bge	$t6, $t2,compare
-	
-	bgt	$t5, $t6, move_left
-	blt	$t5, $t6, move_right
-	move	$s4, $0		##stay counter
-	beq	$t5, $t6, stay
-	
-move_left:
-	
-	li	$t2, 180
-	sw	$t2, ANGLE
-	
-	li	$t2, 1 ##t2 is temporary here
-	sw	$t2, ANGLE_CONTROL
-	
-	li	$t2, 5
-	sw	$t2, VELOCITY
-	
-	
-move_l:	
-	la      $t0, fruit_data    
-
-	sw      $t0, FRUIT_SCAN	
-	
-	lw	$t6, 8($s2)
-	
-	lw	$t5, BOT_X
-
-	bgt	$t5, $t6, move_l
-	
-	j	compare2Conti
-	
-move_right:
-	
-
-	
-	li	$t2, 0
-	sw	$t2, ANGLE
-	
-	li	$t2, 1 ##t2 is temporary here
-	sw	$t2, ANGLE_CONTROL
-	
-	li	$t2, 5
-	sw	$t2, VELOCITY
-	
-move_r:	
-	la      $t0, fruit_data    
-
-	sw      $t0, FRUIT_SCAN	
-	
-	
-	
-	lw	$t6, 8($s2)
-	
-	lw	$t5, BOT_X
-	sub	$t7, $t5, $t6
-	
-
-	blt	$t7, 0, move_r
-	
-	j	compare2Conti
-	
-stay:	
-	add	$s4, $s4, 1
-	lw	$s3, counter
+	bge	$t0, $t1, horizontal
 	
 	sw	$0, VELOCITY
-	j	cycle
+	lw	$t0, BOT_Y
+	li	$t1, 290
 	
-cycle_return:
-	lw	$t9, 0($s2)	
-	la      $t0, fruit_data    	
-	sw      $t0, FRUIT_SCAN
-	lw	$t6, 0($s2)
-	lw	$t8, 12($s2)
+	blt	$t0, $t1, not_go_up
 	
-	bge	$t8, 150, compare
-	lw	$t0, counter
-	bne	$t0, 0, letssmash
-	bne	$t9, $t6, compare
-	
-	li	$t5, 200
-	bge	$s4, $t5, compare
-	j	stay
-	
-cycle:	
-	
-	lw	$s1, VELOCITY
-	sw	$0, VELOCITY	
-	lw	$t0, GET_ENERGY	
-	ble	$t0, 50, we_need_energy
-cycle_end:
-	sw	$s1, VELOCITY
-	j	cycle_return
-		
+	li	$t2, 10				##VELOCITY
+	sw	$t2, VELOCITY			#speed
 
-we_need_energy:	
-	lw	$t0, flag2
-	bne	$t0, $0, cycle_end 
+	li	$t2, 270 			#//vertical!!!!!!
+	sw	$t2, ANGLE
+
+	li	$t2, 1
+	sw	$t2, 0xffff0018
+	j	vertical
+not_go_up:
+	li	$t2, 10				##VELOCITY
+	sw	$t2, VELOCITY			#speed
+
+	li	$t2, 90 			#//vertical!!!!!!
+	sw	$t2, ANGLE
+
+	li	$t2, 1
+	sw	$t2, 0xffff0018
 	
-	li	$t0, 1
-	sw	$t0, flag2
+	lw	$t0, BOT_Y			#currY
+	j	vetical
+
+	li	$t2, 1				##VELOCITY
+	sw	$t2, VELOCITY			#speed
+	
+
+horizontal:
+	sw	$0, VELOCITY
+	
+	lw	$t0, GET_ENERGY
+	li	$t1, 60
+	bge	$t0, $t1, skip_puzzle
 	la	$t0, puzzle_grid
-	sw 	$t0, REQUEST_PUZZLE
-	j 	cycle_end
+	sw	$t0, REQUEST_PUZZLE
+skip_puzzle:	
+	li	$t0, 10
+	sw	$t0, VELOCITY
+
+	la	$t0, num
+	lw	$t0, 0($t0)
+	beq	$t0, 1, smash_down
+
+	
+	li	$t2, 10##VELOCITY temp
+	sw	$t2, VELOCITY
+
+
+
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+
+fruit_selection:
+
+	lw	$s5, 4($t5) #points target 
+	#add	$t5,$t5,16
+	#lw	$t0,0($t5)
+	#beq	$t0,$0,horizontal
+	#bne	$s5,1,fruit_selection ###target point is 1
+	#bne	$s5,1,fruit_selection
+
+	#sub	$t5,$t5,16
+	lw	$t6, 8($t5)#//target_x,first element SHOULD NOT BE CHANGED
+	lw	$t7, 0($t5)#//target_id first element SHOULD NOT BE CHANGED
+	lw	$t4, 0xffff0020($0)#currX
+
+
+	beq	$t4, $t6,equal
+	bgt	$t4, $t6,left_while
+
+right_while:	
+
+
+	li	$t0, 10 ##speed
+	sw	$t0, 0xffff0010($0)#speed
+
+	li	$t0, 0 #right
+	sw	$t0, 0xffff0014($0)
+	li	$t0, 1
+	sw	$t0, 0xffff0018
+
+
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+
+
+	lw	$t1, 0($t5)#id first id of the array
+
+	lw	$t4, 0xffff0020($0)#currX
+	beq	$t4, $t6,equal
+	bgt	$t4, $t6,equal
+
+
+
+exist_right:
+	beq	$t1, $0, vetical#NULL , last of array, does not exist,find new
+	add	$t5, $t5,16
+	lw	$t1, 0($t5)#id of each element in the array
+	
+	beq	$t1, $t7, exist#id exist
+exist:
+	sub	$t5, $t5, 16
+	lw	$t4, 0xffff0020($0)
+	#lw	$s0,8($t4) ###current x
+	#lw	$s3,12($t4)
+	add	$t5, $t5, 16
+	j	exist_right
+
+left_while:
+	#j	equal
+	li	$t0, 10
+	sw	$t0, 0xffff0010($0)#speed
+
+	li	$t0, 180 #left
+	sw	$t0, 0xffff0014($0)
+	li	$t0, 1
+	sw	$t0, 0xffff0018
+
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+	lw	$t1, 0($t5)#/id
+	lw	$t4, 0xffff0020($0)#currX
+	beq	$t4, $t6, equal
+	#blt	$t4,$t6,equal
+	bge	$t4, $t6, equal
+
+
+exist_left:
+	beq	$t1, $0, vetical	#NULL , last of array, does not exist,find new
+	add	$t5, $t5, 16
+	lw	$t1, 0($t5)		#id
+
+	beq	$t1, $t7, left_while	#id exist
+	j	exist_left
+
+equal:
+	li	$t0, 0
+	sw	$t0, 0xffff0010($0)	#speed
+
+	la	$t5, fruit_array
+	sw	$t5, FRUIT_SCAN
+	lw	$t1, 0($t5)		#id
+
 	
 
+exist_equal:
+	beq	$t1, $0,vetical	#NULL , last of array, does not exist,find new
+	add	$t5, $t5, 16
+	lw	$t1, 0($t5)		#id
+
+	beq	$t1, $t7, equal		#id exist
+	j	exist_equal
+
+	# enable interrupts
+	li	$t4, TIMER_MASK		# timer interrupt enable bit
+	or	$t4, $t4, BONK_MASK	# bonk interrupt bit
+	or	$t4, $t4, 1		# global interrupt enable
+	mtc0	$t4, $12		# set interrupt mask (Status register)
+
+	# request timer interrupt
+	lw	$t0, TIMER		# read current time
+	add	$t0, $t0, 50		# add 50 to current time
+	sw	$t0, TIMER		# request timer interrupt in 50 cycles
+
+	li	$a0, 10
+	sw	$a0, VELOCITY		# drive
+
+
+smash_down:
+	li	$t2, 10			##VELOCITY
+	sw	$t2, 0xffff0010($0)	#speed
+	li	$t2, 90 		#//vertical!!!!!!
+	sw	$t2, 0xffff0014($0)
+	li	$t2, 1
+	sw	$t2, 0xffff0018
+
+	la	$t0, num
+	lw	$t0, 0($t0)
+
+	beq	$t0, 0, vetical
+	j	smash_down
+
+
+	
 
 .kdata				# interrupt handler data (separated just for readability)
-chunkIH:	.space 68	# space for 4 registers
+chunkIH:	.space 16	# space for 4 registers
 non_intrpt_str:	.asciiz "Non-interrupt exception\n"
 unhandled_str:	.asciiz "Unhandled interrupt type\n"
+
 
 .ktext 0x80000180
 interrupt_handler:
@@ -303,7 +320,7 @@ interrupt_handler:
 	sw	$s7, 60($k0)
 	
 	sw	$sp, 64($k0)
-	
+
 	mfc0	$k0, $13		# Get Cause register                       
 	srl	$a0, $k0, 2                
 	and	$a0, $a0, 0xf		# ExcCode field                            
@@ -312,105 +329,72 @@ interrupt_handler:
 interrupt_dispatch:			# Interrupt:                             
 	mfc0	$k0, $13		# Get Cause register, again                 
 	beq	$k0, 0, done		# handled all outstanding interrupts     
-	
-	
-	
-	and	$a0, $k0, FRUIT_SMOOSHED_INT_MASK 	# is there a smooshing interrupt?
-	bne	$a0, 0, smooshed_interrupt
-	
+
 	and	$a0, $k0, BONK_MASK	# is there a bonk interrupt?                
-	bne	$a0, 0, bonk_interrupt
-	
-	and 	$a0, $k0, TIMER_MASK		# is there a timer interrupt?
-	bne 	$a0, 0, timer_interrupt
+	bne	$a0, 0, bonk_interrupt   
+
+	and 	$a0,$k0,FRUIT_SMOOSHED_INT_MASK
+	bne	$a0,0,smoosh_interrupt
 	
 	and 	$a0, $k0, REQUEST_PUZZLE_INT_MASK		# is there a timer interrupt?
 	bne 	$a0, 0, puzzle_interrupt
+
+	# add dispatch for other interrupt types here.
+
+	li	$v0, PRINT_STRING	# Unhandled interrupt types
+	la	$a0, unhandled_str
+	syscall 
+	j	done
+
+bonk_interrupt:
+	lw	$t0, num
+smash_fruit:
+	beq	$t0, $0, ack
 	
-	and 	$a0, $k0, OUT_OF_ENERGY_INT_MASK
-	bne 	$a0, 0, no_energy
-	j	non_intrpt
+	sw	$a0, FRUIT_SMASH
+	sub	$t0, $t0,1
 	
-smooshed_interrupt:	
-	lw	$t0, counter
-	add	$t0, $t0, 1
-	sw	$t0, counter
-	sw	$a1, FRUIT_SMOOSHED_ACK
-letssmash2:
-	li	$t2, 90
+	j	smash_fruit	
+ack:
+	sw	$0,  num
+	sw	$a1, BONK_ACK		# acknowledge interrupt
+	##sw	$zero, VELOCITY		# ???
+	
+	li	$t2, 270 		
 	sw	$t2, ANGLE
-	
-	li	$t2, 1 
+	li	$t2, 1
 	sw	$t2, ANGLE_CONTROL
+	sw	$0, VELOCITY
 	
-	##lw	$t4, BOT_Y
-	##li	$t2, 50
-	##ble	$t4, $t2, compare2
-	
-	li	$t2, 10
+smash_up:
+	li	$t2, 10			
 	sw	$t2, VELOCITY
 	
+	lw	$t0, BOT_Y		#currY
+	li	$t1, 270
 	
-	j	interrupt_dispatch	# see if other interrupts are waiting	
-	
-bonk_interrupt:
-	# acknowledge interrupt
-	
-	
+	ble	$t0, $t1, here
 
-	sw	$a1, FRUIT_SMASH
-	sw	$a1, FRUIT_SMASH
-	sw	$a1, FRUIT_SMASH
-	sw	$0, counter
-	sw	$a1, BONK_ACK		
+	##lw	$t0, 0xffff0024($0)	#currY
+	j	smash_up		##problem!!!
+
+
+here:
+	j	interrupt_dispatch	# see if other interrupts are waiting
+
+
+smoosh_interrupt:
+	la	$a3,num
+	lw	$t0,0($a3)
+	add	$t0,$t0,1	
+	sw	$t0,0($a3) #not sure about this
+	sw	$a1, FRUIT_SMOOSHED_ACK
+	j	interrupt_dispatch
+puzzle_interrupt:			
 	
-relocate:
-	li	$a1, 270
-	sw	$a1, ANGLE
-	
-	li	$a1, 1 			##t2 is temporary here
-	sw	$a1, ANGLE_CONTROL
-	
-	li	$a1, 10
-	sw	$a1, VELOCITY
-	
-relocate2:
-	lw	$t2, BOT_Y	
+	lw	$s5, VELOCITY
 	sw	$0, VELOCITY
-	ble	$t2, 100, interrupt_dispatch
-	li	$a1, 10
-	sw	$a1, VELOCITY
-	j	relocate2
-	
-
-		
-	
-timer_interrupt:
-		
-	sw 	$a1, TIMER_ACK	 	# acknowledge interrupt
-						
-	## more to be added		
-					
-	lw 	$v0, 0xffff001c($0) 	# current time
-	add 	$v0, $v0, 50000		
-	sw 	$v0, 0xffff001c($0) 	# request timer in 50000
-					
-	j 	interrupt_dispatch 	# see if other interrupts are waiting
-	
-no_energy:
-		
-	la	$t0, puzzle_grid
-	sw 	$t0, REQUEST_PUZZLE
-	sw 	$a1, OUT_OF_ENERGY_ACK
-	lw	$0, VELOCITY
-	j 	interrupt_dispatch 
-					
-puzzle_interrupt:	
-	sw	$0, flag2
-	li	$a0, 1
-	li	$v0, PRINT_INT
-	syscall		
-					
+				
 	sw	$a1, REQUEST_PUZZLE_ACK # acknowledge interrupt
 	la	$t0, puzzle_word
 	sw	$t0, REQUEST_WORD
@@ -426,12 +410,35 @@ puzzle_interrupt:
 	la	$a1, puzzle_word
 	li	$a2, 0
 	li	$a3, 0
-
-	jal	search_neighbors
-
+	
+	jal	solve_puzzle
+	
+	bne	$v0, $0, sn_finished 
+	
+	la	$t0, puzzle_grid
+	sw	$t0, REQUEST_PUZZLE
+	j 	interrupt_dispatch
+	
+sn_finished:	
 	sw  	$v0, SUBMIT_SOLUTION
-	j 	interrupt_dispatch	
+	move	$a0, $v0
+	li	$v0, PRINT_INT
+	syscall
+	
+	li	$a0, ' '
+	li	$v0, PRINT_CHAR
+	syscall
+	
+	sw	$s5, VELOCITY
+	
+	
+	j 	interrupt_dispatch		
 
+non_intrpt:				# was some non-interrupt
+	li	$v0, PRINT_STRING
+	la	$a0, non_intrpt_str
+	syscall				# print out an error message
+	# fall through to done
 allocate_new_node:		
 	lw	$v0, new_node_address
 	add	$t0, $v0, NODE_SIZE
@@ -463,6 +470,58 @@ set_node:
 	
 ##set node finished
 
+
+
+## Node *
+## search_neighbors(char *puzzle, const char *word, int row, int col) {
+##     if (word == NULL) {
+##         return NULL;
+##     }
+##     for (int i = 0; i < 4; i++) {
+##         int next_row = row + directions[i][0];
+##         int next_col = col + directions[i][1];
+##         // boundary check
+##
+##
+##
+##				
+##		if ( next row == num_rows ){
+##			next row = 0;
+##			next col ++;
+##		}
+##
+##		if ( next col == num cols){
+##			next col = 0;
+##			next row ++;
+##		}
+##
+##
+##
+##		
+##     *    if ((next_row > -1) && (next_row < num_rows) && (next_col > -1) &&
+##             (next_col < num_cols)) {
+##             if (puzzle[next_row * num_cols + next_col] == *word) {
+##                 if (*(word + 1) == '\0') {
+##                     return set_node(next_row, next_col, NULL);
+##                 }
+##                 // mark the spot on puzzle as visited
+##                 puzzle[next_row * num_cols + next_col] = '*';
+##                 // search for next char in the word
+##                 Node *next_node =
+##                     search_neighbors(puzzle, word + 1, next_row, next_col);
+##                 // unmark
+##                 puzzle[next_row * num_cols + next_col] = *word;
+##                 // if there is a valid neighbor, return the linked list
+##                 if (next_node) {
+##                     return set_node(next_row, next_col, next_node);
+##                 }
+##             }
+##         }
+##     }
+##     return NULL;
+## }
+
+
 search_neighbors:
 	bne	$a1, 0, sn_main		# !(word == NULL)
 	li	$v0, 0			# return NULL (data flow)
@@ -492,6 +551,19 @@ sn_loop:
 	add	$s5, $s2, $t1		# next_row
 	lw	$t1, directions+4($t0)	# directions[i][1]
 	add	$s6, $s3, $t1		# next_col
+
+	lw	$t0, num_rows		# my new code goes here
+	bne	$t0, $s5, skip1		##
+	li	$s5, 0			##
+	add	$s6, $s6, 1
+	
+					##
+skip1:					##
+	lw	$t0, num_cols		##
+	bne	$t0, $s6, skip2		##
+	li	$s6, 0			##
+	add	$s5, $s5, 1
+skip2:
 
 	ble	$s5, -1, sn_next	# !(next_row > -1)
 	lw	$t0, num_rows
@@ -552,14 +624,106 @@ sn_return:
 	jr	$ra
 ##search neighbour finished
 
-					
-non_intrpt:				# was some non-interrupt
-	li	$v0, PRINT_STRING	
-	la	$a0, non_intrpt_str	
-	syscall				# print out an error message
-					# fall through to done
+solve_puzzle:
+	sub	$sp, $sp, 24
+	sw	$ra, 0($sp)
+	sw	$s0, 4($sp)
+	sw	$s1, 8($sp)
+	sw	$s2, 12($sp)
+	sw	$s3, 16($sp)
+	sw	$s4, 20($sp)
+
+	move	$s0, $a0		# puzzle
+	move	$s1, $a1		# word
+
+	lb	$t0, 0($s1)		# word[0]
+	beq	$t0, 0, sp_true		# word[0] == '\0'
+
+	li	$s2, 0			# row = 0
+
+sp_row_for:
+	lw	$t0, num_rows
+	bge	$s2, $t0, sp_false	# !(row < num_rows)
+
+	li	$s3, 0			# col = 0
+
+sp_col_for:
+	lw	$t0, num_cols
+	bge	$s3, $t0, sp_row_next	# !(col < num_cols)
+
+	move	$a0, $s0		# puzzle
+	move	$a1, $s2		# row
+	move	$a2, $s3		# col
+	jal	get_char		# $v0 = current_char
+	lb	$t0, 0($s1)		# target_char = word[0]
+	bne	$v0, $t0, sp_col_next	# !(current_char == target_char)
+
+##	move	$a0, $s0		# puzzle
+##	move	$a1, $s2		# row
+##	move	$a2, $s3		# col
+##	li	$a3, '*'
+##	jal	set_char
+
+	move	$a0, $s0		# puzzle
+	add	$a1, $s1, 0		# word + 1
+	move	$a2, $s2		# row
+	move	$a3, $s3		# col
+	jal	search_neighbors
+	move	$s4, $v0		# exist
+
+##	move	$a0, $s0		# puzzle
+##	move	$a1, $s2		# row
+##	move	$a2, $s3		# col
+##	lb	$a3, 0($s1)		# word[0]
+##	jal	set_char
+
+	bne	$s4, 0, sp_true		# if (exist)
+
+sp_col_next:
+	add	$s3, $s3, 1		# col++
+	j	sp_col_for
+
+sp_row_next:
+	add	$s2, $s2, 1		# row++
+	j	sp_row_for
+
+sp_false:
+	li	$v0, 0			# false
+	j	sp_done
+
+sp_true:
+	move	$v0, $s4		# true
+
+sp_done:
+	lw	$ra, 0($sp)
+	lw	$s0, 4($sp)
+	lw	$s1, 8($sp)
+	lw	$s2, 12($sp)
+	lw	$s3, 16($sp)
+	lw	$s4, 20($sp)
+	add	$sp, $sp, 24
+	jr	$ra
+
+get_char:
+	lw	$v0, num_cols
+	mul	$v0, $a1, $v0	# row * num_cols
+	add	$v0, $v0, $a2	# row * num_cols + col
+	add	$v0, $a0, $v0	# &array[row * num_cols + col]
+	lb	$v0, 0($v0)	# array[row * num_cols + col]
+	jr	$ra
+
+set_char:
+	lw	$v0, num_cols
+	mul	$v0, $a1, $v0	# row * num_cols
+	add	$v0, $v0, $a2	# row * num_cols + col
+	add	$v0, $a0, $v0	# &array[row * num_cols + col]
+	sb	$a3, 0($v0)	# array[row * num_cols + col] = c
+	jr	$ra
+
+
+
 done:
-	
+	la	$k0, chunkIH
 	la	$k0, chunkIH
 	lw	$a0, 0($k0)		# Get some free registers                  
 	lw	$a1, 4($k0)
@@ -580,8 +744,7 @@ done:
 	lw	$s7, 60($k0)
 	
 	lw	$sp, 64($k0)
-	
-	
+
 .set noat
 	move	$at, $k1		# Restore $at
 .set at 
